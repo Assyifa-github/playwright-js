@@ -1,0 +1,7 @@
+base_url: "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login"
+
+credentials:
+  valid_username: "Admin"
+  valid_password: "admin123"
+  invalid_username: "wrong_username_demo@punkproof.com"
+  invalid_password: "wrong_passwrod"
