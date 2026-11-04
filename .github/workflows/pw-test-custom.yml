@@ -1,0 +1,124 @@
+name: Custom Tag Automation Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Test Tag (e.g. @login, @connections, @regression)'
+        required: true
+        type: string
+        default: '@regression'
+      env:
+        description: 'Target Environment'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - production
+          - demo
+      headless:
+        description: 'Run Headless?'
+        required: true
+        default: true
+        type: boolean
+      retry:
+        description: 'Number of retries'
+        required: true
+        default: '0'
+        type: choice
+        options:
+          - '0'
+          - '1'
+          - '2'
+          - '3'
+      slack:
+        description: 'Slack Notification'
+        required: true
+        default: 'always' 
+        type: choice
+        options:
+          - off
+          - always
+          - on-failure
+      fully_parallel:
+        description: 'Run tests fully parallel?'
+        required: true
+        default: false
+        type: boolean
+      workers:
+        description: 'Number of workers'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+
+jobs:
+  playwright-test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install chrome --with-deps
+
+    - name: Create .env file
+      run: cp env.txt .env
+
+    - name: Run Playwright tests
+      env:
+        GMAIL_USER: '${{ secrets.GMAIL_APP_PASSWORD }}'
+        GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      run: |
+        TAG_NAME="${{ github.event.inputs.tag }}"
+        TARGET_ENV="${{ github.event.inputs.env }}"
+        SLACK_NOTIF="${{ github.event.inputs.slack }}"
+        HEADLESS_VAL="${{ github.event.inputs.headless }}"
+        RETRY_VAL="${{ github.event.inputs.retry }}"
+        FULLY_PARALLEL_VAL="${{ github.event.inputs.fully_parallel }}"
+        WORKERS_VAL="${{ github.event.inputs.workers }}"
+        
+        echo "Running tests with Tag: $TAG_NAME on $TARGET_ENV environment"
+        echo "Headless=$HEADLESS_VAL, Retries=$RETRY_VAL, Fully_Parallel=$FULLY_PARALLEL_VAL, Workers=$WORKERS_VAL"
+        
+        HEADLESS=$HEADLESS_VAL \
+        TARGET=$TARGET_ENV \
+        SLACK=$SLACK_NOTIF \
+        FULLY_PARALLEL=$FULLY_PARALLEL_VAL \
+        WORKERS=$WORKERS_VAL \
+        TIMEOUT=50000 \
+        POST_TEST_DELAY=3000 \
+        npx playwright test -g "$TAG_NAME" --project=mobile-web --retries=$RETRY_VAL || exit 0
+      continue-on-error: true
+
+    - name: Upload Monocart Report
+      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: custom-run-monocart-report
+        path: monocart-report/
+        retention-days: 15
+
+    # - name: Upload Playwright HTML Report
+    #   uses: actions/upload-artifact@v4
+    #   if: ${{ !cancelled() }}
+    #   with:
+    #     name: custom-run-html-report
+    #     path: playwright-report/
+    #     retention-days: 15
